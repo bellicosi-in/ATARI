@@ -6,18 +6,18 @@
 Start:
     sei         ; disable interrupts
     cld         ; disable the BCD decimal math mode
-    ldx #4FF    ; Loads the X register with #$FF
-    txs         ; transfer the Xr register to the stack pointer
+    ldx #$FF    ; Loads the X register with #$FF
+    txs         ; transfer the X register to the stack pointer
 
 
 ;; clear the page zero region ;;
 ;;meaning the entire ram and also the entire tia registers ;;
     lda #0      ; A = 0
     ldx #$FF    ; X = $FF
-
+    sta $FF     ; make sure $FF is zeroed before the loop starts
 MemLoop:   
-    sta $0,X    ; store the value of A inside memory address $0 + X
     dex         ; X--
+    sta $0,X    ; store the value of A inside memory address $0 + X
     bne MemLoop ;Loop until X is equal to Zero( z- flag is set)
 
 ;;fill the rom size to exactly 4kb
