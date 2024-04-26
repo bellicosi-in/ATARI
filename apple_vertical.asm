@@ -48,24 +48,25 @@ StartFrame:
     sta VBLANK
 
     ldx #192
-
 Scanline:
-    txa         ;transfer x to a
-    sec         ;set the carry flag
-    sbc PlayerYPos     ;subtract sprite Y coordinate
-    cmp P0Height      ;are we inside the spirit height bounds?
-    bcc LoadBitMap     ;if result < SpriteHeight, call subroutine
-    lda #0              ;else set the index to 0
-LoadBitMap:
-    tay 
-    lda P0Bitmap,Y     ;load player bitmap slice of data
-    sta WSYNC           ;wait for next scanline
-    sta GRP0            ;set the graphics for player 0 slice
-    lda P0Color,Y      ;load player color from lookup table
-    sta COLUP0          ;set color for player 0 slice
+    txa
+    sec
+    sbc PlayerYPos          ;subtract the Y Position from the current scanline position
+    cmp P0Height            ;check if the P0Height > the value in accumulator
+    bcc LoadBitmap          ;if the carry flag is set branch to LoadBitMap
+    lda #0                  ;else set the index to zero
+
+LoadBitmap:
+    tay
+    lda P0Bitmap,Y          ;load player bitmap slice of data
+    sta WSYNC               ;wait for next scanline
+    sta GRP0                ;set graphics for the player 0 slice
+    lda P0Color,Y           ;load color from the lookip table
+    sta COLUP0              ;set color for the player 0 slice
 
     dex
-    bne Scanline        ;repeat next until scanline is finished
+    bne Scanline            ;repeat next scanline until finished
+
 
 Overscan:
     lda #2
