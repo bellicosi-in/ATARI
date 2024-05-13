@@ -110,6 +110,22 @@ StartFrame:
     REPEND
     sta VBLANK               ; turn off VBLANK
 
+;;;Display the scoreboard
+    lda #0
+    sta PF0
+    sta PF1
+    sta PF2
+    sta GRP0
+    sta GRP1
+    sta COLUPF
+    REPEAT 20
+        sta WSYNC
+    REPEND
+
+
+
+
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Display 192 visible scanlines of our game (96 lines because 2-line kernel)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -127,7 +143,7 @@ GameVisibleLine:
     lda #0
     sta PF2                  ; setting PF2 bit pattern
 
-    ldx #96                  ; X counts the number of remaining scanlines
+    ldx #84                  ; X counts the number of remaining scanlines
 .GameLineLoop:
 .AreWeInsideJetSprite:
     txa                      ; transfer X to A
@@ -236,6 +252,32 @@ UpdateBomberPosition:
 
 EndPositionUpdate:           ; fallback for the position update code
 
+
+CheckCollisionP0P1:
+    lda #%10000000
+    bit CXPPMM
+    bne .CollisionP0P1
+    jmp CheckCollisionP0PF
+
+.CollisionP0P1
+    jsr GameOver
+
+CheckCollisionP0PF:
+    lda #%10000000
+    bit CXP0FB
+    bne .CollisionP0PF
+    jmp EndCollisionCheck
+
+.CollisionP0PF
+    jsr GameOver
+
+EndCollisionCheck:
+    sta CXCLR
+
+
+
+
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Loop back to start a brand new frame
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -261,6 +303,14 @@ SetObjectXPos subroutine
     sta HMP0,Y               ; store the fine offset to the correct HMxx
     sta RESP0,Y              ; fix object position in 15-step increment
     rts
+
+
+GameOver subroutine
+    lda #30
+    sta COLUBK
+    rts
+
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Subroutine to generate a Linear-Feedback Shift Register random number
