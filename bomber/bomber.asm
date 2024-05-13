@@ -18,7 +18,7 @@ JetSpritePtr word       ;pointer of the jet sprite
 JetColorPtr word        ;pointer to the color of the jet sprite
 BomberSpritePtr word    ;pointer to the bomb sprite
 BomberColorPtr word     ;pointer to the color of the bomb sprite
-
+JetAnimOffset byte      ;player0 sprite frame offset fro animation
 
 
 
@@ -43,7 +43,7 @@ Reset:
 
     lda #10         ;randomly assigning the x position of the player1
     sta JetYPos
-    lda #60         ;randomly assigning the y position of the player1
+    lda #0         ;randomly assigning the y position of the player1
     sta JetXPos
     lda #83
     sta BomberYPos  ;assigning the bomber Y position
@@ -75,6 +75,26 @@ Reset:
 
 
 StartFrame:
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Calculations and tasks performed in the pre-VBlank
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+    lda JetXPos
+    ldy #0
+    jsr SetObjectXPos           ;set player0 horizontal position
+
+    lda BomberXPos
+    ldy #1
+    jsr SetObjectXPos
+
+    sta WSYNC
+    sta HMOVE                   ;apply the horizontal 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;    DISPLAY VSYNC AND VBLANK    ;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
     lda #2
     sta VBLANK          ;turn on VBLANK
     sta VSYNC           ;turn on VYSNC
@@ -120,6 +140,8 @@ GameVisibleLoop:
     lda #0
 
 .DrawSpriteP0:
+    clc                     ;clear carry flag
+    adc JetAnimOffset       ;jump to the correct offset for sprite
     tay
     lda (JetSpritePtr),Y
     sta WSYNC
@@ -147,7 +169,8 @@ GameVisibleLoop:
 
     dex
     bne .GameLoop
-
+    lda #0
+    sta JetAnimOffset
     
 
 
@@ -161,7 +184,82 @@ Overscan:
     lda #0
     sta VBLANK
 
+;;; process joystick input
+CheckP0Up:
+    lda #%00010000          ;player0 joystick up
+    bit SWCHA
+    bne CheckP0Down         ;if bit pattern doesnt match, bypass Up block
+    inc JetYPos
+    lda #0
+    sta JetAnimOffset       ;resey sprite animation
+
+CheckP0Down:
+    lda #%00100000          ;player0 joystiock down
+    bit SWCHA
+    bne CheckP0Left
+    dec JetYPos
+    lda #0
+    sta JetAnimOffset       ;resey sprite animation
+
+CheckP0Left:
+    lda #%01000000
+    bit SWCHA
+    bne CheckP0Right
+    dec JetXPos
+    lda JET_HEIGHT
+    sta JetAnimOffset
+
+CheckP0Right:
+    lda #%10000000
+    bit SWCHA
+    bne EndInputCheck
+    inc JetXPos
+    lda JET_HEIGHT
+    sta JetAnimOffset
+EndInputCheck:                  ;fall back when no input
+
+
+;;;;;;;; calculations to update position for next frame
+UpdateBomberPosition:
+    lda BomberYPos
+    clc
+    cmp #0
+    bmi .ResetBomberPosition        ;if it is less than 0, reset bomber to the top
+    dec BomberYPos                  ;else decrement enemy Y position
+    jmp EndPositionUpdate
+.ResetBomberPosition
+    lda #96
+    sta BomberYPos
+
+EndPositionUpdate:
+
+
     jmp StartFrame
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Subroutine to handle object horizontal position with fine offset
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; A is the target x-coordinate position in pixels of our object
+;; Y is the object type (0:player0, 1:player1, 2:missile0, 3:missile1, 4:ball)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+SetObjectXPos subroutine
+    sta WSYNC       ;start a fresh new scanline
+    sec             ;make sure carry flag is set before subtraction
+.Div15Loop:
+    sbc #15
+    bcs .Div15Loop
+    eor #7
+    asl
+    asl
+    asl
+    asl
+
+    sta HMP0,Y
+    sta RESP0,Y
+    rts
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Declare ROM lookup tables
