@@ -306,8 +306,9 @@ SetObjectXPos subroutine
 
 
 GameOver subroutine
-    lda #30
+    lda #$30
     sta COLUBK
+    sta COLUPF
     rts
 
 
