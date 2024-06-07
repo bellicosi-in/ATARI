@@ -16,6 +16,11 @@ JetXPos         byte         ; player0 x-position
 JetYPos         byte         ; player0 y-position
 BomberXPos      byte         ; player1 x-position
 BomberYPos      byte         ; player1 y-position
+Score           byte         ; 2 digit
+Timer            byte         ; 2 digit stored as bcd
+Temp            byte            ; to store temporary scores
+OnesDigitOffset word
+TensDigitOffset word
 JetSpritePtr    word         ; pointer to player0 sprite lookup table
 JetColorPtr     word         ; pointer to player0 color lookup table
 BomberSpritePtr word         ; pointer to player1 sprite lookup table
@@ -28,6 +33,7 @@ Random          byte         ; used to generate random bomber x-position
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 JET_HEIGHT = 9               ; player0 sprite height (# rows in lookup table)
 BOMBER_HEIGHT = 9            ; player1 sprite height (# rows in lookup table)
+DIGIT_HEIGHT = 5             ;scoreboard height
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Start our ROM code at memory address $F000
@@ -51,6 +57,10 @@ Reset:
     sta BomberYPos           ; BomberYPos = 83
     lda #%11010100
     sta Random               ; Random = $D4
+    lda #0
+    sta Score
+    sta Timer
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Initialize the pointers to the correct lookup table adresses
@@ -99,6 +109,8 @@ StartFrame:
     ldy #1
     jsr SetObjectXPos        ; set player1 horizontal position
 
+    jsr CalculateDigitOffset    ;calculate digit offset
+
     sta WSYNC
     sta HMOVE 
     lda #0
@@ -115,7 +127,10 @@ StartFrame:
     sta PF2
     sta GRP0
     sta GRP1
+    lda #$1C            ;set colorfield to white
     sta COLUPF
+    lda #00
+    sta CTRLPF          ;disable playfield reflection
     REPEAT 20
         sta WSYNC
     REPEND
@@ -128,7 +143,7 @@ StartFrame:
 ;; Display 192 visible scanlines of our game (96 lines because 2-line kernel)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 GameVisibleLine:
-    lda #$84
+    lda #$85
     sta COLUBK               ; set background/river color to blue
     lda #$C2
     sta COLUPF               ; set playfield/grass color to green
@@ -343,10 +358,159 @@ GetRandomBomberPos subroutine
     sta BomberYPos           ; set the y-position to the top of the screen
 
     rts
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Subroutine to handle scoreboard digits to be displayed on the screen
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; The scoreboard is stored using BCD, so the display shows hex numbers.
+;; This converts the high and low nibbles of the variable Score and Timer
+;; into the offsets of digits lookup table so the values can be displayed.
+;; Each digit has a height of 5 bytes in the lookup table.
+;;
+;; For the low nibble we need to multiply by 5
+;;   - we can use left shifts to perform multiplication by 2
+;;   - for any number N, the value of N*5 = (N*2*2)+N
+;;
+;; For the upper nibble, since its already times 16, we need to divide it
+;; and then multiply by 5:
+;;   - we can use right shifts to perform division by 2
+;;   - for any number N, the value of (N/16)*5 is equal to (N/4)+(N/16)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+CalculateDigitOffset subroutine
+
+    ldx #1          ; X register is the loop counter 
+.PrepareScoreLoop   ; this will loop twice, fist X - 1 and the x -0
+
+    lda Score,X     ;load the acc with timer (X=1) and Score(X=0)
+    and #%00001111  ; $0F remvoe the tens digit by masking 4 bits
+    sta Temp        ;save the value of A into temp
+    asl             ;shift left (N*2)
+    asl             ;SHIFT LEFT (n*4)    
+    adc Temp        ;(add the value saved in Temp) (+N)
+    sta OnesDigitOffset,X   ;
+
+    lda Score,X
+    and #$F0
+    lsr
+    lsr
+    sta Temp
+    lsr
+    lsr 
+    adc Temp
+    sta TensDigitOffset,X
+    dex 
+    bpl .PrepareScoreLoop
+    rts
+
+   
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Declare ROM lookup tables
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+Digits:
+    .byte %01110111          ; ### ###
+    .byte %01010101          ; # # # #
+    .byte %01010101          ; # # # #
+    .byte %01010101          ; # # # #
+    .byte %01110111          ; ### ###
+
+    .byte %00010001          ;   #   #
+    .byte %00010001          ;   #   #
+    .byte %00010001          ;   #   #
+    .byte %00010001          ;   #   #
+    .byte %00010001          ;   #   #
+
+    .byte %01110111          ; ### ###
+    .byte %00010001          ;   #   #
+    .byte %01110111          ; ### ###
+    .byte %01000100          ; #   #
+    .byte %01110111          ; ### ###
+
+    .byte %01110111          ; ### ###
+    .byte %00010001          ;   #   #
+    .byte %00110011          ;  ##  ##
+    .byte %00010001          ;   #   #
+    .byte %01110111          ; ### ###
+
+    .byte %01010101          ; # # # #
+    .byte %01010101          ; # # # #
+    .byte %01110111          ; ### ###
+    .byte %00010001          ;   #   #
+    .byte %00010001          ;   #   #
+
+    .byte %01110111          ; ### ###
+    .byte %01000100          ; #   #
+    .byte %01110111          ; ### ###
+    .byte %00010001          ;   #   #
+    .byte %01110111          ; ### ###
+
+    .byte %01110111          ; ### ###
+    .byte %01000100          ; #   #
+    .byte %01110111          ; ### ###
+    .byte %01010101          ; # # # #
+    .byte %01110111          ; ### ###
+
+    .byte %01110111          ; ### ###
+    .byte %00010001          ;   #   #
+    .byte %00010001          ;   #   #
+    .byte %00010001          ;   #   #
+    .byte %00010001          ;   #   #
+
+    .byte %01110111          ; ### ###
+    .byte %01010101          ; # # # #
+    .byte %01110111          ; ### ###
+    .byte %01010101          ; # # # #
+    .byte %01110111          ; ### ###
+
+    .byte %01110111          ; ### ###
+    .byte %01010101          ; # # # #
+    .byte %01110111          ; ### ###
+    .byte %00010001          ;   #   #
+    .byte %01110111          ; ### ###
+
+    .byte %00100010          ;  #   #
+    .byte %01010101          ; # # # #
+    .byte %01110111          ; ### ###
+    .byte %01010101          ; # # # #
+    .byte %01010101          ; # # # #
+
+    .byte %01110111          ; ### ###
+    .byte %01010101          ; # # # #
+    .byte %01100110          ; ##  ##
+    .byte %01010101          ; # # # #
+    .byte %01110111          ; ### ###
+
+    .byte %01110111          ; ### ###
+    .byte %01000100          ; #   #
+    .byte %01000100          ; #   #
+    .byte %01000100          ; #   #
+    .byte %01110111          ; ### ###
+
+    .byte %01100110          ; ##  ##
+    .byte %01010101          ; # # # #
+    .byte %01010101          ; # # # #
+    .byte %01010101          ; # # # #
+    .byte %01100110          ; ##  ##
+
+    .byte %01110111          ; ### ###
+    .byte %01000100          ; #   #
+    .byte %01110111          ; ### ###
+    .byte %01000100          ; #   #
+    .byte %01110111          ; ### ###
+
+    .byte %01110111          ; ### ###
+    .byte %01000100          ; #   #
+    .byte %01100110          ; ##  ##
+    .byte %01000100          ; #   #
+    .byte %01000100          ; #   #
+
+
+
+
+
+
 JetSprite:
     .byte #%00000000         ;
     .byte #%00010100         ;   # #
