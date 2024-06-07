@@ -12,30 +12,32 @@
     seg.u Variables
     org $80
 
-JetXPos         byte         ; player0 x-position
-JetYPos         byte         ; player0 y-position
-BomberXPos      byte         ; player1 x-position
-BomberYPos      byte         ; player1 y-position
-Score           byte         ; 2 digit
-Timer            byte         ; 2 digit stored as bcd
-Temp            byte            ; to store temporary scores
-OnesDigitOffset word
-TensDigitOffset word
+JetXPos         byte         ; player 0 x-position
+JetYPos         byte         ; player 0 y-position
+BomberXPos      byte         ; player 1 x-position
+BomberYPos      byte         ; player 1 y-position
+Score           byte         ; 2-digit score stored as BCD
+Timer           byte         ; 2-digit timer stored as BCD
+Temp            byte         ; auxiliary variable to store temp values
+OnesDigitOffset word         ; lookup table offset for the score Ones digit
+TensDigitOffset word         ; lookup table offset for the score Tens digit
 JetSpritePtr    word         ; pointer to player0 sprite lookup table
 JetColorPtr     word         ; pointer to player0 color lookup table
 BomberSpritePtr word         ; pointer to player1 sprite lookup table
 BomberColorPtr  word         ; pointer to player1 color lookup table
 JetAnimOffset   byte         ; player0 frame offset for sprite animation
 Random          byte         ; used to generate random bomber x-position
-ScoreSprite     byte
-TimerSprite     byte
+ScoreSprite     byte         ; store the sprite bit pattern for the score
+TimerSprite     byte         ; store the sprite bit pattern for the timer
+TerrainColor    byte         ; store the color of the terrain playfield
+RiverColor      byte         ; store the color of the river playfield
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Define constants
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 JET_HEIGHT = 9               ; player0 sprite height (# rows in lookup table)
 BOMBER_HEIGHT = 9            ; player1 sprite height (# rows in lookup table)
-DIGIT_HEIGHT = 5             ;scoreboard height
+DIGITS_HEIGHT = 5            ; scoreboard digit height (#rows in lookup table)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Start our ROM code at memory address $F000
@@ -47,7 +49,7 @@ Reset:
     CLEAN_START              ; call macro to reset memory and registers
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Initialize RAM variables and TIA registers
+;; Initialize RAM variables
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     lda #68
     sta JetXPos              ; JetXPos = 68
@@ -59,10 +61,10 @@ Reset:
     sta BomberYPos           ; BomberYPos = 83
     lda #%11010100
     sta Random               ; Random = $D4
-    lda #0
-    sta Score
-    sta Timer
-
+    lda #4
+    sta Score                ; Score = 0
+    lda #8
+    sta Timer                ; Timer = 0
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Initialize the pointers to the correct lookup table adresses
@@ -93,25 +95,23 @@ Reset:
 StartFrame:
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Calculations and tasks performed in the pre-VBlank
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-                   ; apply the horizontal offsets previously set
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Display VSYNC and VBLANK
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     lda #2
     sta VBLANK               ; turn on VBLANK
     sta VSYNC                ; turn on VSYNC
     REPEAT 3
-        sta WSYNC
+        sta WSYNC            ; display 3 recommended lines of VSYNC
     REPEND
-
     lda #0
     sta VSYNC                ; turn off VSYNC
     REPEAT 33
-        sta WSYNC            ; display the 37 recommended lines of VBLANK
+        sta WSYNC            ; display the recommended lines of VBLANK
     REPEND
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Calculations and tasks performed in the VBlank
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     lda JetXPos
     ldy #0
     jsr SetObjectXPos        ; set player0 horizontal position
@@ -120,62 +120,62 @@ StartFrame:
     ldy #1
     jsr SetObjectXPos        ; set player1 horizontal position
 
-    jsr CalculateDigitOffset    ;calculate digit offset
+    jsr CalculateDigitOffset ; calculate scoreboard digits lookup table offset
 
     sta WSYNC
-    sta HMOVE 
+    sta HMOVE                ; apply the horizontal offsets previously set
+
     lda #0
     sta VBLANK               ; turn off VBLANK
 
-;;;Display the scoreboard
-    lda #0
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Display the scoreboard lines
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    lda #0                   ; reset TIA registers before displaying the score
+    sta COLUBK
     sta PF0
     sta PF1
     sta PF2
     sta GRP0
     sta GRP1
-    ; lda #$1C            ;set colorfield to white
-    ; sta COLUPF
-    ; lda #00
-    ; sta CTRLPF          ;disable playfield reflection
-    ; REPEAT 20
-    ;     sta WSYNC
-    ; REPEND
+    sta CTRLPF
 
-    ldx #DIGIT_HEIGHT
+    lda #$1E
+    sta COLUPF               ; set the scoreboard playfield color with yellow
+
+    ldx #DIGITS_HEIGHT       ; start X counter with 5 (height of digits)
+
 .ScoreDigitLoop:
-    ldy TensDigitOffset
-    lda Digits,y
-    and #$F0
-    sta ScoreSprite
+    ldy TensDigitOffset      ; get the tens digit offset for the Score
+    lda Digits,Y             ; load the bit pattern from lookup table
+    and #$F0                 ; mask/remove the graphics for the ones digit
+    sta ScoreSprite          ; save the score tens digit pattern in a variable
 
-    ldy OnesDigitOffset
-    lda Digits,Y
-    and #$0F
-    ora ScoreSprite
-    sta ScoreSprite
+    ldy OnesDigitOffset      ; get the ones digit offset for the Score
+    lda Digits,Y             ; load the digit bit pattern from lookup table
+    and #$0F                 ; mask/remove the graphics for the tens digit
+    ora ScoreSprite          ; merge it with the saved tens digit sprite
+    sta ScoreSprite          ; and save it
+    sta WSYNC                ; wait for the end of scanline
+    sta PF1                  ; update the playfield to display the Score sprite
 
-    sta WSYNC
-    sta PF1
+    ldy TensDigitOffset+1    ; get the left digit offset for the Timer
+    lda Digits,Y             ; load the digit pattern from lookup table
+    and #$F0                 ; mask/remove the graphics for the ones digit
+    sta TimerSprite          ; save the timer tens digit pattern in a variable
 
+    ldy OnesDigitOffset+1    ; get the ones digit offset for the Timer
+    lda Digits,Y             ; load digit pattern from the lookup table
+    and #$0F                 ; mask/remove the graphics for the tens digit
+    ora TimerSprite          ; merge with the saved tens digit graphics
+    sta TimerSprite          ; and save it
 
-;;TIMER
-    ldy TensDigitOffset + 1             ; +1 because score and timer are stored sequentially in the memory:w
+    jsr Sleep12Cycles        ; wastes some cycles
 
-    lda Digits,Y
-    and #$F0
-    sta TimerSprite
+    sta PF1                  ; update the playfield for Timer display
 
-    ldy OnesDigitOffset + 1
-    lda Digits,Y
-    and #$0F
-    ora TimerSprite
-    sta TimerSprite
-
-    jsr Sleep12Cycles
-    sta PF1
-    ldy ScoreSprite
-    sta WSYNC
+    ldy ScoreSprite          ; preload for the next scanline
+    sta WSYNC                ; wait for next scanline
 
     sty PF1                  ; update playfield for the score display
     inc TensDigitOffset
@@ -185,20 +185,30 @@ StartFrame:
 
     jsr Sleep12Cycles        ; waste some cycles
 
-    dex
+    dex                      ; X--
+    sta PF1                  ; update the playfield for the Timer display
+    bne .ScoreDigitLoop      ; if dex != 0, then branch to ScoreDigitLoop
+
+    sta WSYNC
+
+    lda #0
+    sta PF0
     sta PF1
-    bne .ScoreDigitLoop
-
-
+    sta PF2
+    sta WSYNC
+    sta WSYNC
+    sta WSYNC
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Display 192 visible scanlines of our game (96 lines because 2-line kernel)
+;; Display the remaining visible scanlines of our main game (2-line kernel)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 GameVisibleLine:
-    lda #$85
-    sta COLUBK               ; set background/river color to blue
-    lda #$C2
-    sta COLUPF               ; set playfield/grass color to green
+    lda TerrainColor
+    sta COLUPF               ; set the terrain background color
+
+    lda RiverColor
+    sta COLUBK               ; set the river background color
+
     lda #%00000001
     sta CTRLPF               ; enable playfield reflection
     lda #$F0
@@ -208,7 +218,7 @@ GameVisibleLine:
     lda #0
     sta PF2                  ; setting PF2 bit pattern
 
-    ldx #95                  ; X counts the number of remaining scanlines
+    ldx #85                  ; X counts the number of remaining scanlines
 .GameLineLoop:
 .AreWeInsideJetSprite:
     txa                      ; transfer X to A
@@ -253,53 +263,56 @@ GameVisibleLine:
     sta JetAnimOffset        ; reset jet animation frame to zero each frame
 
     sta WSYNC                ; wait for a scanline
-    sta WSYNC
-   
-    
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Display Overscan
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     lda #2
     sta VBLANK               ; turn on VBLANK again
     REPEAT 30
-        sta WSYNC            ; display 30 recommended lines of VBlank Overscan
+        sta WSYNC            ; display recommended lines of VBlank Overscan
     REPEND
     lda #0
     sta VBLANK               ; turn off VBLANK
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Process joystick input for player0
+;; Process joystick input for player 0 movement
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 CheckP0Up:
-    lda #%00010000           ; player0 joystick up
-    bit SWCHA
-    bne CheckP0Down          ; if bit pattern doesnt match, bypass Up block
-    inc JetYPos
+    lda #%00010000           ; bit pattern to check if P0 joystick is up
+    bit SWCHA                ; if (bit pattern is not joystick up)
+    bne CheckP0Down          ;     then: skip to test next input option
+.P0IsUp:                     ;     else:
+    inc JetYPos              ;         increment jet Y position
     lda #0
-    sta JetAnimOffset        ; reset sprite animation to first frame
+    sta JetAnimOffset        ;         set jet frame of animation to first one
 
 CheckP0Down:
-    lda #%00100000           ; player0 joystick down
-    bit SWCHA
-    bne CheckP0Left          ; if bit pattern doesnt match, bypass Down block
-    dec JetYPos
+    lda #%00100000           ; bit pattern to check if P0 joystick is down
+    bit SWCHA                ; if (bit pattern is not joystick down)
+    bne CheckP0Left          ;     then: skip to test next input option
+.P0IsDown:                   ;     else:
+    dec JetYPos              ;         decrement jet Y position
     lda #0
-    sta JetAnimOffset        ; reset sprite animation to first frame
+    sta JetAnimOffset        ;         set jet frame of animation to first one
 
 CheckP0Left:
-    lda #%01000000           ; player0 joystick left
-    bit SWCHA
-    bne CheckP0Right         ; if bit pattern doesnt match, bypass Left block
-    dec JetXPos
-    lda JET_HEIGHT           ; 9
-    sta JetAnimOffset        ; set animation offset to the second frame
+    lda #%01000000           ; bit pattern to check if P0 joystick is left
+    bit SWCHA                ; if (bit pattern is not joystick left)
+    bne CheckP0Right         ;     then: skip to test next input option
+.P0IsLeft:                   ;     else:
+    dec JetXPos              ;         decrement jet X position
+    lda JET_HEIGHT
+    sta JetAnimOffset        ;         set jet to second frame of animation
 
 CheckP0Right:
-    lda #%10000000           ; player0 joystick right
-    bit SWCHA
-    bne EndInputCheck        ; if bit pattern doesnt match, bypass Right block
-    inc JetXPos
-    lda JET_HEIGHT           ; 9
-    sta JetAnimOffset        ; set animation offset to the second frame
+    lda #%10000000           ; bit pattern to check if P0 joystick is right
+    bit SWCHA                ; if (bit pattern is not joystick right)
+    bne EndInputCheck        ;     then: skip to test next input option
+.P0IsRight:                  ;     else:
+    inc JetXPos              ;         increment jet X position
+    lda JET_HEIGHT
+    sta JetAnimOffset        ;         set jet to second frame of animation
 
 EndInputCheck:               ; fallback when no input was performed
 
@@ -313,41 +326,40 @@ UpdateBomberPosition:
     bmi .ResetBomberPosition ; if it is < 0, then reset y-position to the top
     dec BomberYPos           ; else, decrement enemy y-position for next frame
     jmp EndPositionUpdate
-.ResetBomberPosition
-    jsr GetRandomBomberPos   ; call subroutine for random bomber positio
+.ResetBomberPosition:
+    jsr GetRandomBomberPos   ; call subroutine for random bomber position
 
 EndPositionUpdate:           ; fallback for the position update code
 
-
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Check for object collision
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 CheckCollisionP0P1:
-    lda #%10000000
-    bit CXPPMM
-    bne .CollisionP0P1
-    jmp CheckCollisionP0PF
+    lda #%10000000           ; CXPPMM bit 7 detects P0 and P1 collision
+    bit CXPPMM               ; check CXPPMM bit 7 with the above pattern
+    bne .P0P1Collided        ; if collision between P0 and P1 happened, branch
+    jsr SetTerrainRiverColor ; else, set playfield color to green/blue
+    jmp EndCollisionCheck    ; else, skip to next check
+.P0P1Collided:
+    jsr GameOver             ; call GameOver subroutine
 
-.CollisionP0P1
-    jsr GameOver
-
-CheckCollisionP0PF:
-    lda #%10000000
-    bit CXP0FB
-    bne .CollisionP0PF
-    jmp EndCollisionCheck
-
-.CollisionP0PF
-    jsr GameOver
-
-EndCollisionCheck:
-    sta CXCLR
-
-
-
-
+EndCollisionCheck:           ; fallback
+    sta CXCLR                ; clear all collision flags before the next frame
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Loop back to start a brand new frame
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     jmp StartFrame           ; continue to display the next frame
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Set the colors for the terrain and river to green & blue
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+SetTerrainRiverColor subroutine
+    lda #$C2
+    sta TerrainColor         ; set terrain color to green
+    lda #$84
+    sta RiverColor           ; set river color to blue
+    rts
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Subroutine to handle object horizontal position with fine offset
@@ -370,14 +382,16 @@ SetObjectXPos subroutine
     sta RESP0,Y              ; fix object position in 15-step increment
     rts
 
-
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Game Over subroutine
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 GameOver subroutine
     lda #$30
-    sta COLUBK
-    sta COLUPF
+    sta TerrainColor         ; set terrain color to red
+    sta RiverColor           ; set river color to red
+    lda #0
+    sta Score                ; Score = 0
     rts
-
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Subroutine to generate a Linear-Feedback Shift Register random number
@@ -398,7 +412,6 @@ GetRandomBomberPos subroutine
     eor Random
     asl
     rol Random               ; performs a series of shifts and bit operations
-
     lsr
     lsr                      ; divide the value by 4 with 2 right shifts
     sta BomberXPos           ; save it to the variable BomberXPos
@@ -410,6 +423,7 @@ GetRandomBomberPos subroutine
     sta BomberYPos           ; set the y-position to the top of the screen
 
     rts
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Subroutine to handle scoreboard digits to be displayed on the screen
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -428,44 +442,44 @@ GetRandomBomberPos subroutine
 ;;   - for any number N, the value of (N/16)*5 is equal to (N/4)+(N/16)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 CalculateDigitOffset subroutine
+    ldx #1                   ; X register is the loop counter
+.PrepareScoreLoop            ; this will loop twice, first X=1, and then X=0
 
-    ldx #1          ; X register is the loop counter 
-.PrepareScoreLoop   ; this will loop twice, fist X - 1 and the x -0
+    lda Score,X              ; load A with Timer (X=1) or Score (X=0)
+    and #$0F                 ; remove the tens digit by masking 4 bits 00001111
+    sta Temp                 ; save the value of A into Temp
+    asl                      ; shift left (it is now N*2)
+    asl                      ; shift left (it is now N*4)
+    adc Temp                 ; add the value saved in Temp (+N)
+    sta OnesDigitOffset,X    ; save A in OnesDigitOffset+1 or OnesDigitOffset
 
-    lda Score,X     ;load the acc with timer (X=1) and Score(X=0)
-    and #%00001111  ; $0F remvoe the tens digit by masking 4 bits
-    sta Temp        ;save the value of A into temp
-    asl             ;shift left (N*2)
-    asl             ;SHIFT LEFT (n*4)    
-    adc Temp        ;(add the value saved in Temp) (+N)
-    sta OnesDigitOffset,X   ;
+    lda Score,X              ; load A with Timer (X=1) or Score (X=0)
+    and #$F0                 ; remove the ones digit by masking 4 bits 11110000
+    lsr                      ; shift right (it is now N/2)
+    lsr                      ; shift right (it is now N/4)
+    sta Temp                 ; save the value of A into Temp
+    lsr                      ; shift right (it is now N/8)
+    lsr                      ; shift right (it is now N/16)
+    adc Temp                 ; add the value saved in Temp (N/16+N/4)
+    sta TensDigitOffset,X    ; store A in TensDigitOffset+1 or TensDigitOffset
 
-    lda Score,X
-    and #$F0
-    lsr
-    lsr
-    sta Temp
-    lsr
-    lsr 
-    adc Temp
-    sta TensDigitOffset,X
-    dex 
-    bpl .PrepareScoreLoop
+    dex                      ; X--
+    bpl .PrepareScoreLoop    ; while X >= 0, loop to pass a second time
+
     rts
 
-   
-;;;sleep 12 cycles
-;;;;jsr = 6 cycles
-;;;; rts = 6 cycless
-
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Subroutine to waste 12 cycles
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; jsr takes 6 cycles
+;; rts takes 6 cycles
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 Sleep12Cycles subroutine
     rts
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Declare ROM lookup tables
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-
 Digits:
     .byte %01110111          ; ### ###
     .byte %01010101          ; # # # #
@@ -562,11 +576,6 @@ Digits:
     .byte %01100110          ; ##  ##
     .byte %01000100          ; #   #
     .byte %01000100          ; #   #
-
-
-
-
-
 
 JetSprite:
     .byte #%00000000         ;
