@@ -27,6 +27,8 @@ BomberSpritePtr word         ; pointer to player1 sprite lookup table
 BomberColorPtr  word         ; pointer to player1 color lookup table
 JetAnimOffset   byte         ; player0 frame offset for sprite animation
 Random          byte         ; used to generate random bomber x-position
+ScoreSprite     byte
+TimerSprite     byte
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Define constants
@@ -101,6 +103,15 @@ StartFrame:
     lda #2
     sta VBLANK               ; turn on VBLANK
     sta VSYNC                ; turn on VSYNC
+    REPEAT 3
+        sta WSYNC
+    REPEND
+
+    lda #0
+    sta VSYNC                ; turn off VSYNC
+    REPEAT 33
+        sta WSYNC            ; display the 37 recommended lines of VBLANK
+    REPEND
     lda JetXPos
     ldy #0
     jsr SetObjectXPos        ; set player0 horizontal position
@@ -114,10 +125,6 @@ StartFrame:
     sta WSYNC
     sta HMOVE 
     lda #0
-    sta VSYNC                ; turn off VSYNC
-    REPEAT 37
-        sta WSYNC            ; display the 37 recommended lines of VBLANK
-    REPEND
     sta VBLANK               ; turn off VBLANK
 
 ;;;Display the scoreboard
@@ -127,15 +134,60 @@ StartFrame:
     sta PF2
     sta GRP0
     sta GRP1
-    lda #$1C            ;set colorfield to white
-    sta COLUPF
-    lda #00
-    sta CTRLPF          ;disable playfield reflection
-    REPEAT 20
-        sta WSYNC
-    REPEND
+    ; lda #$1C            ;set colorfield to white
+    ; sta COLUPF
+    ; lda #00
+    ; sta CTRLPF          ;disable playfield reflection
+    ; REPEAT 20
+    ;     sta WSYNC
+    ; REPEND
+
+    ldx #DIGIT_HEIGHT
+.ScoreDigitLoop:
+    ldy TensDigitOffset
+    lda Digits,y
+    and #$F0
+    sta ScoreSprite
+
+    ldy OnesDigitOffset
+    lda Digits,Y
+    and #$0F
+    ora ScoreSprite
+    sta ScoreSprite
+
+    sta WSYNC
+    sta PF1
 
 
+;;TIMER
+    ldy TensDigitOffset + 1             ; +1 because score and timer are stored sequentially in the memory:w
+
+    lda Digits,Y
+    and #$F0
+    sta TimerSprite
+
+    ldy OnesDigitOffset + 1
+    lda Digits,Y
+    and #$0F
+    ora TimerSprite
+    sta TimerSprite
+
+    jsr Sleep12Cycles
+    sta PF1
+    ldy ScoreSprite
+    sta WSYNC
+
+    sty PF1                  ; update playfield for the score display
+    inc TensDigitOffset
+    inc TensDigitOffset+1
+    inc OnesDigitOffset
+    inc OnesDigitOffset+1    ; increment all digits for the next line of data
+
+    jsr Sleep12Cycles        ; waste some cycles
+
+    dex
+    sta PF1
+    bne .ScoreDigitLoop
 
 
 
@@ -402,7 +454,12 @@ CalculateDigitOffset subroutine
     rts
 
    
+;;;sleep 12 cycles
+;;;;jsr = 6 cycles
+;;;; rts = 6 cycless
 
+Sleep12Cycles subroutine
+    rts
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Declare ROM lookup tables
