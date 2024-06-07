@@ -83,6 +83,14 @@ StartFrame:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Calculations and tasks performed in the pre-VBlank
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+                   ; apply the horizontal offsets previously set
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Display VSYNC and VBLANK
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    lda #2
+    sta VBLANK               ; turn on VBLANK
+    sta VSYNC                ; turn on VSYNC
     lda JetXPos
     ldy #0
     jsr SetObjectXPos        ; set player0 horizontal position
@@ -92,17 +100,7 @@ StartFrame:
     jsr SetObjectXPos        ; set player1 horizontal position
 
     sta WSYNC
-    sta HMOVE                ; apply the horizontal offsets previously set
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Display VSYNC and VBLANK
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-    lda #2
-    sta VBLANK               ; turn on VBLANK
-    sta VSYNC                ; turn on VSYNC
-    REPEAT 3
-        sta WSYNC            ; display 3 recommended lines of VSYNC
-    REPEND
+    sta HMOVE 
     lda #0
     sta VSYNC                ; turn off VSYNC
     REPEAT 37
@@ -143,7 +141,7 @@ GameVisibleLine:
     lda #0
     sta PF2                  ; setting PF2 bit pattern
 
-    ldx #84                  ; X counts the number of remaining scanlines
+    ldx #95                  ; X counts the number of remaining scanlines
 .GameLineLoop:
 .AreWeInsideJetSprite:
     txa                      ; transfer X to A
@@ -188,8 +186,9 @@ GameVisibleLine:
     sta JetAnimOffset        ; reset jet animation frame to zero each frame
 
     sta WSYNC                ; wait for a scanline
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    sta WSYNC
+   
+    
 ;; Display Overscan
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     lda #2
