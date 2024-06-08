@@ -61,9 +61,9 @@ Reset:
     sta BomberYPos           ; BomberYPos = 83
     lda #%11010100
     sta Random               ; Random = $D4
-    lda #4
+    lda #0
     sta Score                ; Score = 0
-    lda #8
+    ; lda #8
     sta Timer                ; Timer = 0
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -283,6 +283,10 @@ CheckP0Up:
     bit SWCHA                ; if (bit pattern is not joystick up)
     bne CheckP0Down          ;     then: skip to test next input option
 .P0IsUp:                     ;     else:
+    lda JetYPos 
+    cmp #70
+    bpl CheckP0Down
+
     inc JetYPos              ;         increment jet Y position
     lda #0
     sta JetAnimOffset        ;         set jet frame of animation to first one
@@ -292,6 +296,9 @@ CheckP0Down:
     bit SWCHA                ; if (bit pattern is not joystick down)
     bne CheckP0Left          ;     then: skip to test next input option
 .P0IsDown:                   ;     else:
+    lda JetYPos
+    cmp #5
+    bmi CheckP0Left
     dec JetYPos              ;         decrement jet Y position
     lda #0
     sta JetAnimOffset        ;         set jet frame of animation to first one
@@ -301,6 +308,9 @@ CheckP0Left:
     bit SWCHA                ; if (bit pattern is not joystick left)
     bne CheckP0Right         ;     then: skip to test next input option
 .P0IsLeft:                   ;     else:
+    lda JetXPos
+    cmp #35
+    bmi CheckP0Right
     dec JetXPos              ;         decrement jet X position
     lda JET_HEIGHT
     sta JetAnimOffset        ;         set jet to second frame of animation
@@ -310,6 +320,9 @@ CheckP0Right:
     bit SWCHA                ; if (bit pattern is not joystick right)
     bne EndInputCheck        ;     then: skip to test next input option
 .P0IsRight:                  ;     else:
+    lda JetXPos
+    cmp #100
+    bpl EndInputCheck
     inc JetXPos              ;         increment jet X position
     lda JET_HEIGHT
     sta JetAnimOffset        ;         set jet to second frame of animation
@@ -328,6 +341,8 @@ UpdateBomberPosition:
     jmp EndPositionUpdate
 .ResetBomberPosition:
     jsr GetRandomBomberPos   ; call subroutine for random bomber position
+    inc Score                
+    inc Timer
 
 EndPositionUpdate:           ; fallback for the position update code
 
