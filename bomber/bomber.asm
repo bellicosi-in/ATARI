@@ -117,7 +117,7 @@ StartFrame:
     REPEND
     lda #0
     sta VSYNC                ; turn off VSYNC
-    REPEAT 33
+    REPEAT 31
         sta WSYNC            ; display the recommended lines of VBLANK
     REPEND
 
@@ -236,7 +236,7 @@ GameVisibleLine:
     lda #0
     sta PF2                  ; setting PF2 bit pattern
 
-    ldx #85                  ; X counts the number of remaining scanlines
+    ldx #89                  ; X counts the number of remaining scanlines
 .GameLineLoop:
     DRAW_MISSILE
 .AreWeInsideJetSprite:
