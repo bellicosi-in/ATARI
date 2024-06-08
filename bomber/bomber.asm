@@ -138,6 +138,8 @@ StartFrame:
 
     jsr CalculateDigitOffset ; calculate scoreboard digits lookup table offset
 
+    jsr GenerateJetSound     ; generate the jet sound
+
     sta WSYNC
     sta HMOVE                ; apply the horizontal offsets previously set
 
@@ -558,6 +560,27 @@ CalculateDigitOffset subroutine
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 Sleep12Cycles subroutine
     rts
+
+
+;;;Generate Jet Sound routine;;
+GenerateJetSound subroutine
+
+    lda #3
+    sta AUDV0
+    lda JetYPos
+    lsr
+    lsr
+    lsr
+    sta Temp
+    lda #31
+    sec
+    sbc Temp
+    sta AUDF0
+    lda #8
+    sta AUDC0
+
+    rts
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Declare ROM lookup tables
